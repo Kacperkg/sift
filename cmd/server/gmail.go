@@ -257,7 +257,25 @@ func mergeApplicationRecord(older, newer application) application {
 	if newer.ThreadID == "" {
 		newer.ThreadID = older.ThreadID
 	}
+	if older.Closed && !newer.Closed {
+		newer.Status = older.Status
+		newer.Closed = true
+	}
 	return newer
+}
+
+func carryClosedOutcomes(existing, scanned []application) []application {
+	for index := range scanned {
+		for _, previous := range existing {
+			if !previous.Closed || !sameApplication(previous, scanned[index]) {
+				continue
+			}
+			scanned[index].Status = previous.Status
+			scanned[index].Closed = true
+			break
+		}
+	}
+	return scanned
 }
 
 func applicationTime(app application) time.Time {

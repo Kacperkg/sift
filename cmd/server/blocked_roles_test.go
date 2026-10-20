@@ -39,3 +39,23 @@ func TestUnknownRoleCanBeIgnoredByMessageID(t *testing.T) {
 		t.Fatalf("expected message block to be removable, got %+v", blocks)
 	}
 }
+
+func TestInterviewCanBeClosedAsAcceptedOrDeclined(t *testing.T) {
+	for _, outcome := range []string{"Accepted", "Declined"} {
+		apps := []application{{ID: "gmail-1", Status: "Interviewing"}}
+		updated, err := closeInterview(apps, "gmail-1", outcome)
+		if err != nil {
+			t.Fatalf("%s: %v", outcome, err)
+		}
+		if updated.Status != outcome || !updated.Closed || apps[0] != updated {
+			t.Fatalf("%s: interview was not closed: %#v", outcome, updated)
+		}
+	}
+}
+
+func TestOnlyOpenInterviewCanBeClosed(t *testing.T) {
+	apps := []application{{ID: "gmail-1", Status: "Applied"}}
+	if _, err := closeInterview(apps, "gmail-1", "Accepted"); err == nil {
+		t.Fatal("closed a non-interview application")
+	}
+}

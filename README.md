@@ -11,9 +11,10 @@ The application has no hosted backend, cloud database, analytics, or third-party
 - Fast incremental updates that only request email newer than the last successful scan.
 - Deterministic detection of applications, interviews, employment offers, and rejections.
 - Optional local-AI fallback for ambiguous wording, missing roles, and missing companies.
-- Search and status filters for Applied, No response, Interviewing, Offer, and Declined.
+- Search and status filters for Applied, No response, Interviewing, Offer, Accepted, and Declined.
 - Live scan-progress toast with Gmail reading and classification counts.
 - Clickable application records with a direct link to the original Gmail message.
+- Manual **Accepted** and **Declined** outcomes for closing an active interview.
 - **Not my application** action for false positives.
 - Persistent encrypted blocking of unwanted role titles.
 - Message-level hiding when a role cannot be detected.
@@ -73,7 +74,12 @@ The last successful sync timestamp is encrypted locally in:
 - **No response** — an Applied record older than 14 days with no recognized outcome.
 - **Interviewing** — an actual interview invitation, screening call, assessment stage, or next round. Generic advice such as “next step” does not qualify.
 - **Offer** — an employment offer made to the candidate. A job board calling a vacancy a “job offer” does not qualify.
+- **Accepted** — a manually closed interview with a successful outcome.
 - **Declined** — explicit rejection, unsuccessful outcome, closed/filled position, or a decision not to progress the application.
+
+### Closing an interview
+
+Open an **Interviewing** record and choose **Accepted** or **Declined** under **Close interview**. This only updates Sift's encrypted local record; it does not modify the Gmail message. Manual outcomes are preserved during incremental updates and full rescans.
 
 LinkedIn Easy Apply and job-board applications can be detected when they generate a confirmation or follow-up email matching these signals. Applications that never produce an email cannot be discovered through Gmail.
 

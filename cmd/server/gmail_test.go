@@ -189,3 +189,33 @@ func TestGmailSearchQuerySupportsIncrementalUpdates(t *testing.T) {
 		t.Fatal("full scan query lost its two-year window")
 	}
 }
+
+func TestClosedOutcomeSurvivesIncrementalUpdate(t *testing.T) {
+	existing := []application{{
+		ID: "old", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
+		Status: "Accepted", Closed: true, UpdatedAt: "2026-09-20T09:00:00Z",
+	}}
+	incoming := []application{{
+		ID: "new", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
+		Status: "Interviewing", UpdatedAt: "2026-09-21T09:00:00Z",
+	}}
+	apps := mergeApplications(existing, incoming)
+	if len(apps) != 1 || apps[0].Status != "Accepted" || !apps[0].Closed || apps[0].ID != "new" {
+		t.Fatalf("manual outcome was not preserved: %#v", apps)
+	}
+}
+
+func TestClosedOutcomeSurvivesFullRescan(t *testing.T) {
+	existing := []application{{
+		ID: "old", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
+		Status: "Declined", Closed: true, UpdatedAt: "2026-09-20T09:00:00Z",
+	}}
+	scanned := []application{{
+		ID: "new", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
+		Status: "Interviewing", UpdatedAt: "2026-09-21T09:00:00Z",
+	}}
+	apps := carryClosedOutcomes(existing, scanned)
+	if apps[0].Status != "Declined" || !apps[0].Closed {
+		t.Fatalf("manual outcome was not preserved: %#v", apps)
+	}
+}

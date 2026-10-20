@@ -30,6 +30,7 @@ type application struct {
 	Company   string `json:"company"`
 	Role      string `json:"role"`
 	Status    string `json:"status"`
+	Closed    bool   `json:"closed,omitempty"`
 	LastEvent string `json:"lastEvent"`
 	UpdatedAt string `json:"updatedAt"`
 }
@@ -121,6 +122,7 @@ func main() {
 	mux.HandleFunc("/api/health", s.health)
 	mux.HandleFunc("/api/auth/status", s.authStatus)
 	mux.HandleFunc("/api/applications", s.applications)
+	mux.HandleFunc("/api/applications/status", s.applicationStatus)
 	mux.HandleFunc("/api/sync", s.sync)
 	mux.HandleFunc("/api/sync/status", s.syncProgressStatus)
 	mux.HandleFunc("/api/blocked-roles", s.blockedRoles)
@@ -304,6 +306,64 @@ func (s *server) applications(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, apps)
 }
 
+func (s *server) applicationStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var update struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 2048)).Decode(&update); err != nil {
+		http.Error(w, "invalid outcome", http.StatusBadRequest)
+		return
+	}
+	update.ID = strings.TrimSpace(update.ID)
+	update.Status = strings.TrimSpace(update.Status)
+	if update.ID == "" || (update.Status != "Accepted" && update.Status != "Declined") {
+		http.Error(w, "outcome must be Accepted or Declined", http.StatusBadRequest)
+		return
+	}
+
+	s.dataMu.Lock()
+	defer s.dataMu.Unlock()
+	var apps []application
+	if err := s.store.Load(&apps); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.Error(w, "application not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "could not read local data", http.StatusInternalServerError)
+		return
+	}
+	updated, err := closeInterview(apps, update.ID, update.Status)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	if err := s.store.Save(apps); err != nil {
+		http.Error(w, "could not save encrypted data", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func closeInterview(apps []application, id, outcome string) (application, error) {
+	for index := range apps {
+		if apps[index].ID != id {
+			continue
+		}
+		if apps[index].Status != "Interviewing" || apps[index].Closed {
+			return application{}, errors.New("only an open interview can be closed")
+		}
+		apps[index].Status = outcome
+		apps[index].Closed = true
+		return apps[index], nil
+	}
+	return application{}, errors.New("application not found")
+}
+
 func (s *server) blockedRoles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -389,17 +449,15 @@ func (s *server) sync(w http.ResponseWriter, r *http.Request) {
 	fullScan := strings.EqualFold(r.URL.Query().Get("mode"), "full")
 	var existing []application
 	var state syncState
-	if !fullScan {
-		s.dataMu.Lock()
-		loadErr := s.store.Load(&existing)
-		if loadErr == nil || errors.Is(loadErr, os.ErrNotExist) {
-			loadErr = s.syncStore.Load(&state)
-		}
-		s.dataMu.Unlock()
-		if loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
-			http.Error(w, "could not read local sync state", http.StatusInternalServerError)
-			return
-		}
+	s.dataMu.Lock()
+	loadErr := s.store.Load(&existing)
+	if !fullScan && (loadErr == nil || errors.Is(loadErr, os.ErrNotExist)) {
+		loadErr = s.syncStore.Load(&state)
+	}
+	s.dataMu.Unlock()
+	if loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
+		http.Error(w, "could not read local sync state", http.StatusInternalServerError)
+		return
 	}
 
 	var after time.Time
@@ -428,6 +486,8 @@ func (s *server) sync(w http.ResponseWriter, r *http.Request) {
 	apps := found
 	if !fullScan {
 		apps = mergeApplications(existing, found)
+	} else {
+		apps = carryClosedOutcomes(existing, found)
 	}
 	apps = filterBlockedApplications(apps, blocks)
 	s.reportSyncProgress(scanProgress{Phase: "Saving private index", Processed: len(apps), Total: len(apps)})

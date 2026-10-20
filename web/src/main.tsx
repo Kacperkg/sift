@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
-type Application = { id: string; company: string; role: string; status: string; lastEvent: string; updatedAt: string }
+type Application = { id: string; company: string; role: string; status: string; closed?: boolean; lastEvent: string; updatedAt: string }
 type AIStatus = { enabled: boolean; available: boolean; modelInstalled: boolean; model: string }
 type BlockedRole = { role?: string; messageId?: string; label?: string; createdAt: string }
 type SyncProgress = { running: boolean; phase: string; processed: number; total: number }
-const statuses = ['Applied', 'No response', 'Interviewing', 'Offer', 'Declined'] as const
+const statuses = ['Applied', 'No response', 'Interviewing', 'Offer', 'Accepted', 'Declined'] as const
 const filters = ['All', ...statuses] as const
 
 function ArrowIcon({ direction = 'up' }: { direction?: 'up' | 'left' }) {
@@ -43,6 +43,7 @@ function App() {
   const [aiBusy, setAIBusy] = useState(false)
   const [blockedRoles, setBlockedRoles] = useState<BlockedRole[]>([])
   const [blockBusy, setBlockBusy] = useState(false)
+  const [outcomeBusy, setOutcomeBusy] = useState(false)
   const [scanProgress, setScanProgress] = useState<SyncProgress | null>(null)
 
   const load = async () => {
@@ -117,7 +118,17 @@ function App() {
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not update blocked roles.') }
     finally { setBlockBusy(false) }
   }
-  if (selectedId) return <Detail application={selected} onBack={closeApplication} onBlock={application => setItemBlocked(application.role === 'Role not detected' ? { messageId: application.id, label: application.lastEvent || application.company } : { role: application.role }, true)} blockBusy={blockBusy} />
+  const closeInterview = async (application: Application, status: 'Accepted' | 'Declined') => {
+    setOutcomeBusy(true); setError('')
+    try {
+      const response = await fetch('/api/applications/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: application.id, status }) })
+      if (!response.ok) throw new Error(await response.text())
+      const updated = await response.json()
+      setApps(current => current.map(item => item.id === updated.id ? updated : item))
+    } catch (error) { setError(error instanceof Error ? error.message : 'Could not close this interview.') }
+    finally { setOutcomeBusy(false) }
+  }
+  if (selectedId) return <Detail application={selected} onBack={closeApplication} onBlock={application => setItemBlocked(application.role === 'Role not detected' ? { messageId: application.id, label: application.lastEvent || application.company } : { role: application.role }, true)} blockBusy={blockBusy} onCloseInterview={closeInterview} outcomeBusy={outcomeBusy} error={error} />
 
   return <main className="shell">
     <nav className="topbar" aria-label="Primary navigation">
@@ -183,7 +194,7 @@ function App() {
   </main>
 }
 
-function Detail({ application, onBack, onBlock, blockBusy }: { application?: Application; onBack: () => void; onBlock: (application: Application) => void; blockBusy: boolean }) {
+function Detail({ application, onBack, onBlock, blockBusy, onCloseInterview, outcomeBusy, error }: { application?: Application; onBack: () => void; onBlock: (application: Application) => void; blockBusy: boolean; onCloseInterview: (application: Application, status: 'Accepted' | 'Declined') => void; outcomeBusy: boolean; error: string }) {
   if (!application) return <main className="detail-shell missing"><button className="back-button" onClick={onBack}><ArrowIcon direction="left" /> Back to index</button><h1>Application not found.</h1><p>It may have been removed by a more recent Gmail scan.</p></main>
   const gmailUrl = `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(application.id)}`
   return <main className="detail-shell">
@@ -195,7 +206,7 @@ function Detail({ application, onBack, onBlock, blockBusy }: { application?: App
     </section>
     <section className="detail-grid">
       <article className="email-card"><span className="section-kicker">Latest matched email</span><h2>{application.lastEvent || 'Application update'}</h2><div className="email-meta"><span>Gmail message</span><time dateTime={application.updatedAt}>{formatDate(application.updatedAt, true)}</time></div><a className="gmail-button" href={gmailUrl} target="_blank" rel="noreferrer">Open original in Gmail <ArrowIcon /></a><p className="link-note">Opens the exact message in your signed-in Gmail account.</p></article>
-      <aside className="record-card"><span className="section-kicker">Record details</span><dl><div><dt>Company</dt><dd>{application.company}</dd></div><div><dt>Role</dt><dd>{application.role}</dd></div><div><dt>Status</dt><dd>{application.status}</dd></div><div><dt>Last activity</dt><dd>{formatDate(application.updatedAt, true)}</dd></div></dl><div className="security-note"><LockIcon /><p><strong>Stored privately</strong><br />This record is encrypted on your Mac. Job Inbox only has read-only Gmail access.</p></div><div className="block-action"><button onClick={() => onBlock(application)} disabled={blockBusy}>{blockBusy ? 'Removing…' : application.role === 'Role not detected' ? 'Not my application · Hide email' : 'Not my application · Block role'}</button><p>{application.role === 'Role not detected' ? 'Hides this Gmail message permanently from future scans.' : `Removes every exact “${application.role}” match and prevents it returning after a scan.`}</p></div></aside>
+      <aside className="record-card"><span className="section-kicker">Record details</span><dl><div><dt>Company</dt><dd>{application.company}</dd></div><div><dt>Role</dt><dd>{application.role}</dd></div><div><dt>Status</dt><dd>{application.status}</dd></div><div><dt>Last activity</dt><dd>{formatDate(application.updatedAt, true)}</dd></div></dl>{application.status === 'Interviewing' && !application.closed && <div className="outcome-action"><span className="section-kicker">Close interview</span><div><button className="accept" onClick={() => onCloseInterview(application, 'Accepted')} disabled={outcomeBusy}>{outcomeBusy ? 'Saving…' : 'Accepted'}</button><button className="decline" onClick={() => onCloseInterview(application, 'Declined')} disabled={outcomeBusy}>{outcomeBusy ? 'Saving…' : 'Declined'}</button></div><p>Sets a private manual outcome. Nothing is changed in Gmail.</p>{error && <small role="alert">{error}</small>}</div>}<div className="security-note"><LockIcon /><p><strong>Stored privately</strong><br />This record is encrypted on your Mac. Job Inbox only has read-only Gmail access.</p></div><div className="block-action"><button onClick={() => onBlock(application)} disabled={blockBusy}>{blockBusy ? 'Removing…' : application.role === 'Role not detected' ? 'Not my application · Hide email' : 'Not my application · Block role'}</button><p>{application.role === 'Role not detected' ? 'Hides this Gmail message permanently from future scans.' : `Removes every exact “${application.role}” match and prevents it returning after a scan.`}</p></div></aside>
     </section>
   </main>
 }

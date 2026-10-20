@@ -40,7 +40,7 @@ svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8;
 .ai-control button.enabled { color:var(--ink); border-color:var(--acid); background:var(--acid); }
 .ai-control button:disabled { cursor:not-allowed; opacity:.5; }
 
-.metrics { display:grid; grid-template-columns:1.18fr repeat(5,1fr); border-bottom:1px solid var(--line); }
+.metrics { display:grid; grid-template-columns:1.18fr repeat(6,1fr); border-bottom:1px solid var(--line); }
 .metric { position:relative; min-height:165px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; padding:22px; border:0; border-right:1px solid var(--line); color:var(--ink); background:transparent; text-align:left; cursor:pointer; transition:background .25s ease,color .25s ease; }
 .metric:first-child { border-left:1px solid var(--line); }
 .metric:hover,.metric.is-active { background:var(--ink); color:var(--paper); }
@@ -80,6 +80,7 @@ svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8;
 .pill>span { width:5px; height:5px; border-radius:50%; background:currentColor; }
 .pill.interviewing { color:#114d69; background:#d4eaf4; }
 .pill.offer { color:#365d14; background:#dff3c9; }
+.pill.accepted { color:#274d0b; background:#ccefa9; }
 .pill.declined { color:#853d32; background:#f3d9d3; }
 .pill.no-response { color:#725810; background:#f2e7bc; }
 .application-row time { color:var(--muted); font-size:11px; transition:color .25s ease; }
@@ -138,6 +139,14 @@ footer strong { color:var(--ink); }
 .record-card dl>div { display:grid; grid-template-columns:100px 1fr; gap:20px; padding:17px 0; border-top:1px solid var(--line); }
 .record-card dt { color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:.1em; }
 .record-card dd { margin:0; font-size:13px; line-height:1.35; }
+.outcome-action { margin-top:32px; padding:20px; border:1px solid var(--line); background:#eeeadf; }
+.outcome-action>div { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; }
+.outcome-action button { border:1px solid var(--ink); border-radius:100px; padding:11px 12px; font-size:10px; font-weight:600; cursor:pointer; }
+.outcome-action button.accept { color:var(--ink); background:var(--acid); }
+.outcome-action button.decline { color:#7b3021; border-color:#c99588; background:transparent; }
+.outcome-action button:disabled { opacity:.5; cursor:wait; }
+.outcome-action p { margin:11px 0 0; color:var(--muted); font-size:9px; line-height:1.5; }
+.outcome-action small { display:block; margin-top:10px; color:#8b3324; font-size:9px; line-height:1.4; }
 .security-note { display:flex; gap:14px; margin-top:44px; padding:20px; color:#d7dacd; background:var(--ink); }
 .security-note svg { flex:0 0 auto; width:20px; }
 .security-note p { margin:0; font-size:11px; line-height:1.6; }
