@@ -1,4 +1,4 @@
-package main
+package services
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestLocalAIRejectsRemoteEndpoint(t *testing.T) {
-	if _, err := newLocalAI("https://example.com", "qwen3:4b", true); err == nil {
+	if _, err := NewLocalAI("https://example.com", "qwen3:4b", true); err == nil {
 		t.Fatal("accepted a remote AI endpoint")
 	}
 }
@@ -31,7 +31,7 @@ func TestLocalAIUsesStructuredLocalResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ai, err := newLocalAI(server.URL, "qwen3:4b", true)
+	ai, err := NewLocalAI(server.URL, "qwen3:4b", true)
 	if err != nil {
 		t.Fatal(err)
 	}

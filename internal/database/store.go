@@ -1,4 +1,5 @@
-package securestore
+// Package database provides encrypted local persistence and macOS Keychain access.
+package database
 
 import (
 	"crypto/aes"

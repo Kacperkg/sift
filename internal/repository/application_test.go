@@ -1,14 +1,18 @@
-package main
+package repository
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Kacperkg/sift/internal/models"
+)
 
 func TestBlockedRoleFilteringIsCaseAndWhitespaceInsensitive(t *testing.T) {
-	apps := []application{
+	apps := []models.Application{
 		{ID: "1", Role: "Remote Data Entry"},
 		{ID: "2", Role: "Frontend Developer"},
 		{ID: "3", Role: "  REMOTE   DATA ENTRY "},
 	}
-	blocks := []blockedRole{{Role: "remote data entry"}}
+	blocks := []models.BlockedRole{{Role: "remote data entry"}}
 	filtered := filterBlockedApplications(apps, blocks)
 	if len(filtered) != 1 || filtered[0].ID != "2" {
 		t.Fatalf("unexpected filtered applications: %+v", filtered)
@@ -28,7 +32,7 @@ func TestBlockedRoleCanBeAddedAndRemoved(t *testing.T) {
 }
 
 func TestUnknownRoleCanBeIgnoredByMessageID(t *testing.T) {
-	apps := []application{{ID: "gmail-1", Role: "Role not detected"}, {ID: "gmail-2", Role: "Role not detected"}}
+	apps := []models.Application{{ID: "gmail-1", Role: "Role not detected"}, {ID: "gmail-2", Role: "Role not detected"}}
 	blocks := updateBlockedItems(nil, "", "gmail-1", "Suspicious application email", true)
 	filtered := filterBlockedApplications(apps, blocks)
 	if len(filtered) != 1 || filtered[0].ID != "gmail-2" {
@@ -42,7 +46,7 @@ func TestUnknownRoleCanBeIgnoredByMessageID(t *testing.T) {
 
 func TestInterviewCanBeClosedAsAcceptedOrDeclined(t *testing.T) {
 	for _, outcome := range []string{"Accepted", "Declined"} {
-		apps := []application{{ID: "gmail-1", Status: "Interviewing"}}
+		apps := []models.Application{{ID: "gmail-1", Status: "Interviewing"}}
 		updated, err := closeInterview(apps, "gmail-1", outcome)
 		if err != nil {
 			t.Fatalf("%s: %v", outcome, err)
@@ -54,7 +58,7 @@ func TestInterviewCanBeClosedAsAcceptedOrDeclined(t *testing.T) {
 }
 
 func TestOnlyOpenInterviewCanBeClosed(t *testing.T) {
-	apps := []application{{ID: "gmail-1", Status: "Applied"}}
+	apps := []models.Application{{ID: "gmail-1", Status: "Applied"}}
 	if _, err := closeInterview(apps, "gmail-1", "Accepted"); err == nil {
 		t.Fatal("closed a non-interview application")
 	}

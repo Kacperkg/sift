@@ -1,4 +1,4 @@
-package securestore
+package database
 
 import "testing"
 

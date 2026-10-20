@@ -1,9 +1,11 @@
-package main
+package services
 
 import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Kacperkg/sift/internal/models"
 )
 
 func TestClassify(t *testing.T) {
@@ -147,7 +149,7 @@ func TestDropsProviderOnlyRows(t *testing.T) {
 }
 
 func TestMergeMissingRoleIntoNearestSameCompanyApplication(t *testing.T) {
-	apps := mergeApplications(nil, []application{
+	apps := mergeApplications(nil, []models.Application{
 		{ID: "availability", Company: "Precisely", Role: "Associate Experience Engineer", Status: "Interviewing", LastEvent: "Precisely Interview Availability", UpdatedAt: "2026-09-15T09:00:00Z"},
 		{ID: "confirmation", Company: "Precisely", Role: "Role not detected", Status: "Interviewing", LastEvent: "Precisely Interview Confirmation - Response Required", UpdatedAt: "2026-09-15T10:00:00Z"},
 	})
@@ -160,7 +162,7 @@ func TestMergeMissingRoleIntoNearestSameCompanyApplication(t *testing.T) {
 }
 
 func TestMergeKeepsDifferentDetectedRolesAtSameCompany(t *testing.T) {
-	apps := mergeApplications(nil, []application{
+	apps := mergeApplications(nil, []models.Application{
 		{ID: "frontend", Company: "Acme", Role: "Frontend Engineer", Status: "Applied", UpdatedAt: "2026-09-15T09:00:00Z"},
 		{ID: "backend", Company: "Acme", Role: "Backend Engineer", Status: "Applied", UpdatedAt: "2026-09-15T10:00:00Z"},
 	})
@@ -170,7 +172,7 @@ func TestMergeKeepsDifferentDetectedRolesAtSameCompany(t *testing.T) {
 }
 
 func TestMergeUsesGmailThreadAndPreservesKnownRole(t *testing.T) {
-	apps := mergeApplications(nil, []application{
+	apps := mergeApplications(nil, []models.Application{
 		{ID: "old", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer", Status: "Applied", UpdatedAt: "2026-09-01T09:00:00Z"},
 		{ID: "new", ThreadID: "thread-1", Company: "Acme", Role: "Role not detected", Status: "Interviewing", UpdatedAt: "2026-09-20T09:00:00Z"},
 	})
@@ -191,11 +193,11 @@ func TestGmailSearchQuerySupportsIncrementalUpdates(t *testing.T) {
 }
 
 func TestClosedOutcomeSurvivesIncrementalUpdate(t *testing.T) {
-	existing := []application{{
+	existing := []models.Application{{
 		ID: "old", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
 		Status: "Accepted", Closed: true, UpdatedAt: "2026-09-20T09:00:00Z",
 	}}
-	incoming := []application{{
+	incoming := []models.Application{{
 		ID: "new", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
 		Status: "Interviewing", UpdatedAt: "2026-09-21T09:00:00Z",
 	}}
@@ -206,11 +208,11 @@ func TestClosedOutcomeSurvivesIncrementalUpdate(t *testing.T) {
 }
 
 func TestClosedOutcomeSurvivesFullRescan(t *testing.T) {
-	existing := []application{{
+	existing := []models.Application{{
 		ID: "old", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
 		Status: "Declined", Closed: true, UpdatedAt: "2026-09-20T09:00:00Z",
 	}}
-	scanned := []application{{
+	scanned := []models.Application{{
 		ID: "new", ThreadID: "thread-1", Company: "Acme", Role: "Software Engineer",
 		Status: "Interviewing", UpdatedAt: "2026-09-21T09:00:00Z",
 	}}

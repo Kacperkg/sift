@@ -1,4 +1,4 @@
-package main
+package services
 
 import (
 	"context"
@@ -17,6 +17,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Kacperkg/sift/internal/models"
 )
 
 type gmailList struct {
@@ -35,12 +37,6 @@ type gmailMessage struct {
 			Value string `json:"value"`
 		} `json:"headers"`
 	} `json:"payload"`
-}
-
-type scanProgress struct {
-	Phase     string `json:"phase"`
-	Processed int    `json:"processed"`
-	Total     int    `json:"total"`
 }
 
 var (
@@ -92,7 +88,7 @@ var (
 	nonCompanySender = regexp.MustCompile(`(?i)^(alerts?|linkedin|indeed|greenhouse|lever|workday|ashby|teamtailor|smartrecruiters|jobgether|hiring team|team)$`)
 )
 
-func scanGmail(ctx context.Context, token string, ai *localAI, after time.Time, report func(scanProgress)) ([]application, error) {
+func scanGmail(ctx context.Context, token string, ai *LocalAI, after time.Time, report func(models.SyncStatus)) ([]models.Application, error) {
 	phase := "Searching Gmail"
 	if !after.IsZero() {
 		phase = "Checking for new email"
@@ -126,7 +122,7 @@ func scanGmail(ctx context.Context, token string, ai *localAI, after time.Time, 
 	}
 	waitGroup.Wait()
 
-	apps := make([]application, 0, len(list.Messages))
+	apps := make([]models.Application, 0, len(list.Messages))
 	reportScanProgress(report, "Classifying applications", 0, len(messages))
 	for index, m := range messages {
 		reportScanProgress(report, "Classifying applications", index+1, len(messages))
@@ -144,7 +140,7 @@ func scanGmail(ctx context.Context, token string, ai *localAI, after time.Time, 
 		company, role, status, ok := classify(h["from"], h["subject"], m.Snippet)
 		staleApplied := status == "Applied" && updated.Before(time.Now().AddDate(0, 0, -14))
 		potentialOutcome := shouldReviewPotentialOutcome(h["subject"] + " " + m.Snippet)
-		if ai != nil && ai.isEnabled() && (shouldAskLocalAI(h["subject"], company, role, ok) || (staleApplied && potentialOutcome)) {
+		if ai != nil && ai.IsEnabled() && (shouldAskLocalAI(h["subject"], company, role, ok) || (staleApplied && potentialOutcome)) {
 			if result, err := ai.classify(ctx, h["from"], h["subject"], m.Snippet); err == nil && result.Confidence >= 0.75 {
 				if !result.IsApplication {
 					continue
@@ -174,7 +170,7 @@ func scanGmail(ctx context.Context, token string, ai *localAI, after time.Time, 
 		if status == "Applied" && updated.Before(time.Now().AddDate(0, 0, -14)) {
 			status = "No response"
 		}
-		apps = append(apps, application{ID: m.ID, ThreadID: m.ThreadID, Company: company, Role: role, Status: status, LastEvent: h["subject"], UpdatedAt: updated.Format(time.RFC3339)})
+		apps = append(apps, models.Application{ID: m.ID, ThreadID: m.ThreadID, Company: company, Role: role, Status: status, LastEvent: h["subject"], UpdatedAt: updated.Format(time.RFC3339)})
 	}
 	return mergeApplications(nil, apps), nil
 }
@@ -191,13 +187,13 @@ func gmailSearchQuery(after time.Time) string {
 // Gmail thread identity is authoritative. As a fallback, an email whose role
 // could not be extracted is attached to the nearest same-company application
 // within 14 days. Different detected roles at the same employer remain separate.
-func mergeApplications(existing, incoming []application) []application {
-	combined := append(append(make([]application, 0, len(existing)+len(incoming)), existing...), incoming...)
+func mergeApplications(existing, incoming []models.Application) []models.Application {
+	combined := append(append(make([]models.Application, 0, len(existing)+len(incoming)), existing...), incoming...)
 	sort.SliceStable(combined, func(i, j int) bool {
 		return applicationTime(combined[i]).Before(applicationTime(combined[j]))
 	})
 
-	merged := make([]application, 0, len(combined))
+	merged := make([]models.Application, 0, len(combined))
 	for _, candidate := range combined {
 		match := -1
 		bestDistance := 15 * 24 * time.Hour
@@ -226,7 +222,7 @@ func mergeApplications(existing, incoming []application) []application {
 	return merged
 }
 
-func sameApplication(left, right application) bool {
+func sameApplication(left, right models.Application) bool {
 	if left.ThreadID != "" && right.ThreadID != "" && left.ThreadID == right.ThreadID {
 		return true
 	}
@@ -244,7 +240,7 @@ func sameApplication(left, right application) bool {
 	return distance <= 14*24*time.Hour
 }
 
-func mergeApplicationRecord(older, newer application) application {
+func mergeApplicationRecord(older, newer models.Application) models.Application {
 	if applicationTime(newer).Before(applicationTime(older)) {
 		older, newer = newer, older
 	}
@@ -264,7 +260,7 @@ func mergeApplicationRecord(older, newer application) application {
 	return newer
 }
 
-func carryClosedOutcomes(existing, scanned []application) []application {
+func carryClosedOutcomes(existing, scanned []models.Application) []models.Application {
 	for index := range scanned {
 		for _, previous := range existing {
 			if !previous.Closed || !sameApplication(previous, scanned[index]) {
@@ -278,7 +274,7 @@ func carryClosedOutcomes(existing, scanned []application) []application {
 	return scanned
 }
 
-func applicationTime(app application) time.Time {
+func applicationTime(app models.Application) time.Time {
 	parsed, err := time.Parse(time.RFC3339, app.UpdatedAt)
 	if err != nil {
 		return time.Time{}
@@ -290,10 +286,14 @@ func normalizeCompany(company string) string {
 	return strings.ToLower(strings.Join(strings.Fields(company), " "))
 }
 
-func reportScanProgress(report func(scanProgress), phase string, processed, total int) {
+func reportScanProgress(report func(models.SyncStatus), phase string, processed, total int) {
 	if report != nil {
-		report(scanProgress{Phase: phase, Processed: processed, Total: total})
+		report(models.SyncStatus{Phase: phase, Processed: processed, Total: total})
 	}
+}
+
+func normalizeRole(role string) string {
+	return strings.ToLower(strings.Join(strings.Fields(role), " "))
 }
 
 func shouldAskLocalAI(subject, company, role string, rulesAccepted bool) bool {

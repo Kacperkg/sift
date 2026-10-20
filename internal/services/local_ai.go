@@ -1,4 +1,4 @@
-package main
+package services
 
 import (
 	"bytes"
@@ -31,7 +31,7 @@ Rules:
 - Use an empty string when company or role cannot be determined.
 - Confidence must reflect evidence in this email, not a guess.`
 
-type localAI struct {
+type LocalAI struct {
 	baseURL string
 	model   string
 	client  *http.Client
@@ -60,7 +60,7 @@ type ollamaTagsResponse struct {
 	} `json:"models"`
 }
 
-func newLocalAI(rawURL, model string, enabled bool) (*localAI, error) {
+func NewLocalAI(rawURL, model string, enabled bool) (*LocalAI, error) {
 	parsed, err := url.Parse(strings.TrimRight(rawURL, "/"))
 	if err != nil || parsed.Scheme != "http" || parsed.Hostname() == "" {
 		return nil, errors.New("OLLAMA_URL must be a local HTTP URL")
@@ -72,7 +72,7 @@ func newLocalAI(rawURL, model string, enabled bool) (*localAI, error) {
 	if strings.TrimSpace(model) == "" {
 		return nil, errors.New("OLLAMA_MODEL cannot be empty")
 	}
-	return &localAI{
+	return &LocalAI{
 		baseURL: strings.TrimRight(rawURL, "/"),
 		model:   strings.TrimSpace(model),
 		enabled: enabled,
@@ -80,19 +80,23 @@ func newLocalAI(rawURL, model string, enabled bool) (*localAI, error) {
 	}, nil
 }
 
-func (ai *localAI) isEnabled() bool {
+func (ai *LocalAI) IsEnabled() bool {
 	ai.mu.RLock()
 	defer ai.mu.RUnlock()
 	return ai.enabled
 }
 
-func (ai *localAI) setEnabled(enabled bool) {
+func (ai *LocalAI) SetEnabled(enabled bool) {
 	ai.mu.Lock()
 	ai.enabled = enabled
 	ai.mu.Unlock()
 }
 
-func (ai *localAI) availability(ctx context.Context) (available, modelInstalled bool) {
+func (ai *LocalAI) Model() string {
+	return ai.model
+}
+
+func (ai *LocalAI) Availability(ctx context.Context) (available, modelInstalled bool) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, ai.baseURL+"/api/tags", nil)
 	if err != nil {
 		return false, false
@@ -117,7 +121,7 @@ func (ai *localAI) availability(ctx context.Context) (available, modelInstalled 
 	return true, false
 }
 
-func (ai *localAI) classify(ctx context.Context, from, subject, snippet string) (localAIResult, error) {
+func (ai *LocalAI) classify(ctx context.Context, from, subject, snippet string) (localAIResult, error) {
 	input := fmt.Sprintf("From: %s\nSubject: %s\nSnippet: %s", limitText(from, 300), limitText(subject, 500), limitText(snippet, 1200))
 	format := map[string]any{
 		"type":                 "object",
