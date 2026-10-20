@@ -4,6 +4,16 @@ Sift is a private, local-first job application tracker for Gmail. It separates u
 
 The application has no hosted backend, cloud database, analytics, or third-party AI dependency. Gmail access is read-only, and the optional language model runs through Ollama on the same Mac.
 
+## Screenshots
+
+### Desktop
+
+![Sift dashboard on desktop](docs/screenshots/sift-dashboard-desktop.jpg)
+
+### Mobile
+
+<img src="docs/screenshots/sift-dashboard-mobile.jpg" alt="Sift dashboard on mobile" width="390">
+
 ## Features
 
 - Gmail OAuth using the `gmail.readonly` scope.
@@ -180,6 +190,44 @@ Open an application record and use **Not my application**:
 Blocked items appear below the application index. Select the × beside an item to allow it again. Unblocking does not immediately recreate a record; run another Gmail scan if it should be restored.
 
 ## Development
+
+### Backend architecture
+
+The Go backend follows a small layered structure. `cmd/server` is only the composition root; application behavior lives under `internal`:
+
+```text
+cmd/server/          process startup and dependency wiring
+internal/
+  apperrors/         dependency-free shared error categories
+  auth/              Google OAuth and Gmail token refresh
+  config/            environment loading and typed configuration
+  database/          AES-GCM files and macOS Keychain access
+  handlers/          HTTP request parsing and responses
+  middleware/        CORS and security headers
+  models/            shared application data structures
+  repository/        encrypted application, block, and sync persistence
+  routes/            endpoint and SPA registration
+  services/          Gmail parsing, sync orchestration, and local AI
+```
+
+Dependencies flow inward: routes call handlers, handlers call services, and services use repository interfaces. Storage and HTTP details stay out of the parsing and orchestration code. This keeps the Gmail classifier testable without starting a server or opening the encrypted data store.
+
+The React frontend uses the same separation without introducing a framework-sized architecture:
+
+```text
+web/src/
+  api/                typed calls to the local Go API
+  components/         reusable dashboard and detail UI
+  hooks/              Sift state/actions and hash navigation
+  pages/              dashboard and application-detail composition
+  types/              API and domain types
+  utils/              display and application helpers
+  App.tsx              route-level application composition
+  main.tsx             React browser entrypoint
+  styles.module.css    scoped visual system with the original cascade
+```
+
+Pages compose components, hooks own browser state and actions, and the API module is the only place that knows endpoint URLs. No external state or routing dependency is needed for Sift's two local views.
 
 For separate API and Vite development servers, set this value in `.env`:
 
